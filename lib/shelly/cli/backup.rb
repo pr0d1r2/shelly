@@ -17,9 +17,9 @@ module Shelly
         app = multiple_clouds(options[:cloud], "backup list")
         backups = app.database_backups
         if backups.present?
-          to_display = [["Filename", "|  Size"]]
+          to_display = [["Filename", "|  Size", "|  State"]]
           backups.each do |backup|
-            to_display << [backup.filename, "|  #{backup.human_size}"]
+            to_display << [backup.filename, "|  #{backup.human_size}", "|  #{backup.state.humanize}"]
           end
 
           say "Available backups:", :green
@@ -57,10 +57,13 @@ module Shelly
       }
       def create(kind = nil)
         app = multiple_clouds(options[:cloud], "backup create [DB_KIND]")
-        app.request_backup(kind)
+        cloudfile = Cloudfile.new
+        app.request_backup(kind || cloudfile.backup_databases(app))
         say "Backup requested. It can take up to several minutes for " +
           "the backup process to finish and the backup to show up in backups list.", :green
       rescue Client::ValidationException => e
+        say_error e[:message]
+      rescue Client::ConflictException => e
         say_error e[:message]
       end
 
@@ -78,6 +81,8 @@ module Shelly
         raise unless e.resource == :database_backup
         say_error "Backup not found", :with_exit => false
         say "You can list available backups with `shelly backup list` command"
+      rescue Client::ConflictException => e
+        say_error e[:message]
       end
     end
   end
